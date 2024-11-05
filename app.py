@@ -106,3 +106,24 @@ if __name__ == "__main__":
 # Batch reconciliation
 # Retry logic
 # Audit logging
+
+
+# --- fix: memory leak in audit ---
+"""Module for payment links in payment-gateway."""
+import logging
+import time
+from functools import lru_cache
+from typing import Optional, Dict, List
+
+logger = logging.getLogger("payment-gateway.tokenizer")
+
+
+class TokenizerHandler:
+    """Handles tokenizer operations for payment-gateway."""
+
+    def __init__(self, config: Optional[Dict] = None):
+        self.config = config or {}
+        self._cache = {}
+        self._metrics = {"requests": 0, "errors": 0, "latency_sum": 0}
+        logger.info(f"Initialized tokenizer handler")
+
