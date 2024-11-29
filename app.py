@@ -1,12 +1,12 @@
-"""Configuration for subscription billing."""
+"""Configuration for payment links."""
 import os
 from dataclasses import dataclass, field
 from typing import List
 
 
 @dataclass
-class SubscriptionbillingConfig:
-    """Configuration for subscription billing feature."""
+class PaymentlinksConfig:
+    """Configuration for payment links feature."""
     enabled: bool = True
     timeout_ms: int = int(os.getenv("PAYMENT_GATEWAY_TIMEOUT", "5000"))
     max_retries: int = 3
@@ -26,4 +26,4 @@ class SubscriptionbillingConfig:
 
 
 # Default configuration
-DEFAULT_CONFIG = SubscriptionbillingConfig()
+DEFAULT_CONFIG = PaymentlinksConfig()
