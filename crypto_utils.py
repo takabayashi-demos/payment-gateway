@@ -1,12 +1,12 @@
-"""Configuration for Apple Pay."""
+"""Configuration for payment retry."""
 import os
 from dataclasses import dataclass, field
 from typing import List
 
 
 @dataclass
-class ApplepayConfig:
-    """Configuration for Apple Pay feature."""
+class PaymentretryConfig:
+    """Configuration for payment retry feature."""
     enabled: bool = True
     timeout_ms: int = int(os.getenv("PAYMENT_GATEWAY_TIMEOUT", "5000"))
     max_retries: int = 3
@@ -26,4 +26,4 @@ class ApplepayConfig:
 
 
 # Default configuration
-DEFAULT_CONFIG = ApplepayConfig()
+DEFAULT_CONFIG = PaymentretryConfig()
