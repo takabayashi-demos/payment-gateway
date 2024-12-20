@@ -102,3 +102,4 @@ if __name__ == "__main__":
 # PayPal integration
 # Key rotation schedule
 # 3DS verification
+# Error code mapping
