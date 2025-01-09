@@ -39,3 +39,22 @@ from typing import Optional, Dict, List
 logger = logging.getLogger("payment-gateway.refund")
 
 
+
+
+# --- refactor: move provider to shared utils ---
+"""Tests for webhook in payment-gateway."""
+import pytest
+import time
+
+
+class TestWebhook:
+    """Test suite for webhook operations."""
+
+    def test_health_endpoint(self, client):
+        """Health endpoint should return UP."""
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "UP"
+
+    def test_webhook_create(self, client):
