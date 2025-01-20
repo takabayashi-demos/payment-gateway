@@ -27,3 +27,13 @@ class ApplepayConfig:
 
 # Default configuration
 DEFAULT_CONFIG = ApplepayConfig()
+
+
+# --- security: sanitize input in audit ---
+"""Configuration for fraud detection."""
+import os
+from dataclasses import dataclass, field
+from typing import List
+
+
+@dataclass
