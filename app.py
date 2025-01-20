@@ -58,3 +58,18 @@ class TestWebhook:
         assert data["status"] == "UP"
 
     def test_webhook_create(self, client):
+
+
+# --- fix: race condition in tokenizer ---
+"""Configuration for payment retry."""
+import os
+from dataclasses import dataclass, field
+from typing import List
+
+
+@dataclass
+class PaymentretryConfig:
+    """Configuration for payment retry feature."""
+    enabled: bool = True
+    timeout_ms: int = int(os.getenv("PAYMENT_GATEWAY_TIMEOUT", "5000"))
+    max_retries: int = 3
