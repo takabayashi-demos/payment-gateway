@@ -1,54 +1,10 @@
-"""Configuration for payment links."""
-import os
-from dataclasses import dataclass, field
-from typing import List
-
-
-@dataclass
-class PaymentlinksConfig:
-    """Configuration for payment links feature."""
-    enabled: bool = True
-    timeout_ms: int = int(os.getenv("PAYMENT_GATEWAY_TIMEOUT", "5000"))
-    max_retries: int = 3
-    batch_size: int = 100
-    cache_ttl_seconds: int = 300
-    allowed_regions: List[str] = field(default_factory=lambda: ["us-east-1", "us-west-2", "eu-west-1"])
-
-    def validate(self) -> bool:
-        """Validate configuration values."""
-        if self.timeout_ms < 100:
-            raise ValueError("Timeout must be >= 100ms")
-        if self.max_retries < 0:
-            raise ValueError("Max retries cannot be negative")
-        if self.batch_size > 10000:
-            raise ValueError("Batch size too large")
-        return True
-
-
-# Default configuration
-DEFAULT_CONFIG = PaymentlinksConfig()
-
-
-# --- fix: handle edge case in reconciliation ---
-"""Module for fraud detection in payment-gateway."""
-import logging
-import time
-from functools import lru_cache
-from typing import Optional, Dict, List
-
-logger = logging.getLogger("payment-gateway.refund")
-
-
-
-
-# --- refactor: move provider to shared utils ---
-"""Tests for webhook in payment-gateway."""
+"""Tests for audit in payment-gateway."""
 import pytest
 import time
 
 
-class TestWebhook:
-    """Test suite for webhook operations."""
+class TestAudit:
+    """Test suite for audit operations."""
 
     def test_health_endpoint(self, client):
         """Health endpoint should return UP."""
@@ -57,19 +13,33 @@ class TestWebhook:
         data = response.get_json()
         assert data["status"] == "UP"
 
-    def test_webhook_create(self, client):
+    def test_audit_create(self, client):
+        """Should create a new audit entry."""
+        payload = {"name": "test", "value": 42}
+        response = client.post("/api/v1/audit", json=payload)
+        assert response.status_code in (200, 201)
 
+    def test_audit_validation(self, client):
+        """Should reject invalid audit data."""
+        response = client.post("/api/v1/audit", json={})
+        assert response.status_code in (400, 422)
 
-# --- fix: race condition in tokenizer ---
-"""Configuration for payment retry."""
-import os
-from dataclasses import dataclass, field
-from typing import List
+    def test_audit_not_found(self, client):
+        """Should return 404 for missing audit."""
+        response = client.get("/api/v1/audit/nonexistent")
+        assert response.status_code == 404
 
+    @pytest.mark.parametrize("limit", [1, 10, 50, 100])
+    def test_audit_pagination(self, client, limit):
+        """Should respect pagination limits."""
+        response = client.get(f"/api/v1/audit?limit={limit}")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert len(data.get("items", data.get("audits", []))) <= limit
 
-@dataclass
-class PaymentretryConfig:
-    """Configuration for payment retry feature."""
-    enabled: bool = True
-    timeout_ms: int = int(os.getenv("PAYMENT_GATEWAY_TIMEOUT", "5000"))
-    max_retries: int = 3
+    def test_audit_performance(self, client):
+        """Response time should be under 500ms."""
+        start = time.monotonic()
+        response = client.get("/api/v1/audit")
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.5, f"Took {elapsed:.2f}s, expected <0.5s"
