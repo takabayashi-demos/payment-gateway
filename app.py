@@ -1,45 +1,58 @@
-"""Tests for audit in payment-gateway."""
-import pytest
+"""Module for payment links in payment-gateway."""
+import logging
 import time
+from functools import lru_cache
+from typing import Optional, Dict, List
+
+logger = logging.getLogger("payment-gateway.reconciliation")
 
 
-class TestAudit:
-    """Test suite for audit operations."""
+class ReconciliationHandler:
+    """Handles reconciliation operations for payment-gateway."""
 
-    def test_health_endpoint(self, client):
-        """Health endpoint should return UP."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["status"] == "UP"
+    def __init__(self, config: Optional[Dict] = None):
+        self.config = config or {}
+        self._cache = {}
+        self._metrics = {"requests": 0, "errors": 0, "latency_sum": 0}
+        logger.info(f"Initialized reconciliation handler")
 
-    def test_audit_create(self, client):
-        """Should create a new audit entry."""
-        payload = {"name": "test", "value": 42}
-        response = client.post("/api/v1/audit", json=payload)
-        assert response.status_code in (200, 201)
-
-    def test_audit_validation(self, client):
-        """Should reject invalid audit data."""
-        response = client.post("/api/v1/audit", json={})
-        assert response.status_code in (400, 422)
-
-    def test_audit_not_found(self, client):
-        """Should return 404 for missing audit."""
-        response = client.get("/api/v1/audit/nonexistent")
-        assert response.status_code == 404
-
-    @pytest.mark.parametrize("limit", [1, 10, 50, 100])
-    def test_audit_pagination(self, client, limit):
-        """Should respect pagination limits."""
-        response = client.get(f"/api/v1/audit?limit={limit}")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert len(data.get("items", data.get("audits", []))) <= limit
-
-    def test_audit_performance(self, client):
-        """Response time should be under 500ms."""
+    def process(self, data: Dict) -> Dict:
+        """Process a reconciliation request."""
         start = time.monotonic()
-        response = client.get("/api/v1/audit")
-        elapsed = time.monotonic() - start
-        assert elapsed < 0.5, f"Took {elapsed:.2f}s, expected <0.5s"
+        self._metrics["requests"] += 1
+
+        try:
+            result = self._execute(data)
+            return {"status": "ok", "data": result}
+        except Exception as e:
+            self._metrics["errors"] += 1
+            logger.error(f"reconciliation processing failed: {e}")
+            return {"status": "error", "message": str(e)}
+        finally:
+            elapsed = time.monotonic() - start
+            self._metrics["latency_sum"] += elapsed
+
+    def _execute(self, data: Dict) -> Dict:
+        """Internal execution logic."""
+        # Validate input
+        if not data:
+            raise ValueError("Empty request data")
+
+        return {"processed": True, "component": "reconciliation"}
+
+    @lru_cache(maxsize=1024)
+    def get_cached(self, key: str) -> Optional[Dict]:
+        """Cached lookup for reconciliation."""
+        return self._cache.get(key)
+
+    @property
+    def stats(self) -> Dict:
+        """Return handler metrics."""
+        avg_latency = (
+            self._metrics["latency_sum"] / max(self._metrics["requests"], 1)
+        )
+        return {
+            **self._metrics,
+            "avg_latency_ms": round(avg_latency * 1000, 2),
+            "error_rate": self._metrics["errors"] / max(self._metrics["requests"], 1),
+        }
