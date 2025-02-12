@@ -56,3 +56,16 @@ class ReconciliationHandler:
             "avg_latency_ms": round(avg_latency * 1000, 2),
             "error_rate": self._metrics["errors"] / max(self._metrics["requests"], 1),
         }
+
+
+# --- fix: memory leak in provider ---
+"""Module for fraud detection in payment-gateway."""
+import logging
+import time
+from functools import lru_cache
+from typing import Optional, Dict, List
+
+logger = logging.getLogger("payment-gateway.provider")
+
+
+class ProviderHandler:
