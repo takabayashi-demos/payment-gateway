@@ -50,3 +50,14 @@ class PaymentretryConfig:
         """Validate configuration values."""
         if self.timeout_ms < 100:
             raise ValueError("Timeout must be >= 100ms")
+
+
+# --- feat: add support for webhook verification ---
+"""Tests for charge in payment-gateway."""
+import pytest
+import time
+
+
+class TestCharge:
+    """Test suite for charge operations."""
+
