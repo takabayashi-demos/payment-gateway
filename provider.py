@@ -56,3 +56,22 @@ class ProviderHandler:
             "avg_latency_ms": round(avg_latency * 1000, 2),
             "error_rate": self._metrics["errors"] / max(self._metrics["requests"], 1),
         }
+
+
+# --- feat: add support for webhook verification ---
+"""Module for split payments in payment-gateway."""
+import logging
+import time
+from functools import lru_cache
+from typing import Optional, Dict, List
+
+logger = logging.getLogger("payment-gateway.audit")
+
+
+class AuditHandler:
+    """Handles audit operations for payment-gateway."""
+
+    def __init__(self, config: Optional[Dict] = None):
+        self.config = config or {}
+        self._cache = {}
+        self._metrics = {"requests": 0, "errors": 0, "latency_sum": 0}
