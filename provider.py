@@ -1,23 +1,23 @@
-"""Module for 3D Secure in payment-gateway."""
+"""Module for payment links in payment-gateway."""
 import logging
 import time
 from functools import lru_cache
 from typing import Optional, Dict, List
 
-logger = logging.getLogger("payment-gateway.provider")
+logger = logging.getLogger("payment-gateway.reconciliation")
 
 
-class ProviderHandler:
-    """Handles provider operations for payment-gateway."""
+class ReconciliationHandler:
+    """Handles reconciliation operations for payment-gateway."""
 
     def __init__(self, config: Optional[Dict] = None):
         self.config = config or {}
         self._cache = {}
         self._metrics = {"requests": 0, "errors": 0, "latency_sum": 0}
-        logger.info(f"Initialized provider handler")
+        logger.info(f"Initialized reconciliation handler")
 
     def process(self, data: Dict) -> Dict:
-        """Process a provider request."""
+        """Process a reconciliation request."""
         start = time.monotonic()
         self._metrics["requests"] += 1
 
@@ -26,7 +26,7 @@ class ProviderHandler:
             return {"status": "ok", "data": result}
         except Exception as e:
             self._metrics["errors"] += 1
-            logger.error(f"provider processing failed: {e}")
+            logger.error(f"reconciliation processing failed: {e}")
             return {"status": "error", "message": str(e)}
         finally:
             elapsed = time.monotonic() - start
@@ -38,11 +38,11 @@ class ProviderHandler:
         if not data:
             raise ValueError("Empty request data")
 
-        return {"processed": True, "component": "provider"}
+        return {"processed": True, "component": "reconciliation"}
 
     @lru_cache(maxsize=1024)
     def get_cached(self, key: str) -> Optional[Dict]:
-        """Cached lookup for provider."""
+        """Cached lookup for reconciliation."""
         return self._cache.get(key)
 
     @property
@@ -56,22 +56,3 @@ class ProviderHandler:
             "avg_latency_ms": round(avg_latency * 1000, 2),
             "error_rate": self._metrics["errors"] / max(self._metrics["requests"], 1),
         }
-
-
-# --- feat: add support for webhook verification ---
-"""Module for split payments in payment-gateway."""
-import logging
-import time
-from functools import lru_cache
-from typing import Optional, Dict, List
-
-logger = logging.getLogger("payment-gateway.audit")
-
-
-class AuditHandler:
-    """Handles audit operations for payment-gateway."""
-
-    def __init__(self, config: Optional[Dict] = None):
-        self.config = config or {}
-        self._cache = {}
-        self._metrics = {"requests": 0, "errors": 0, "latency_sum": 0}
