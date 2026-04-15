@@ -106,3 +106,4 @@ if __name__ == "__main__":
 # Batch reconciliation
 # Retry logic
 # Audit logging
+IDEMPOTENCY_TTL = 86400
