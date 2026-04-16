@@ -1,45 +1,73 @@
-"""Tests for tokenizer in payment-gateway."""
-import pytest
-import time
+"""Payment-gateway microservice — tokenizer API."""
+import uuid
+from datetime import datetime, timezone
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+# In-memory store (replaced by vault-backed store in production)
+_tokens: dict[str, dict] = {}
 
 
-class TestTokenizer:
-    """Test suite for tokenizer operations."""
+@app.route("/health")
+def health():
+    return jsonify({"status": "UP", "service": "payment-gateway"})
 
-    def test_health_endpoint(self, client):
-        """Health endpoint should return UP."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["status"] == "UP"
 
-    def test_tokenizer_create(self, client):
-        """Should create a new tokenizer entry."""
-        payload = {"name": "test", "value": 42}
-        response = client.post("/api/v1/tokenizer", json=payload)
-        assert response.status_code in (200, 201)
+@app.route("/api/v1/tokenizer", methods=["GET"])
+def list_tokens():
+    limit = request.args.get("limit", 20, type=int)
+    limit = max(1, min(limit, 100))
+    status_filter = request.args.get("status")
 
-    def test_tokenizer_validation(self, client):
-        """Should reject invalid tokenizer data."""
-        response = client.post("/api/v1/tokenizer", json={})
-        assert response.status_code in (400, 422)
+    items = list(_tokens.values())
+    if status_filter:
+        items = [t for t in items if t.get("status") == status_filter]
 
-    def test_tokenizer_not_found(self, client):
-        """Should return 404 for missing tokenizer."""
-        response = client.get("/api/v1/tokenizer/nonexistent")
-        assert response.status_code == 404
+    items = sorted(items, key=lambda t: t["created_at"], reverse=True)[:limit]
+    return jsonify({"items": items, "count": len(items)})
 
-    @pytest.mark.parametrize("limit", [1, 10, 50, 100])
-    def test_tokenizer_pagination(self, client, limit):
-        """Should respect pagination limits."""
-        response = client.get(f"/api/v1/tokenizer?limit={limit}")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert len(data.get("items", data.get("tokenizers", []))) <= limit
 
-    def test_tokenizer_performance(self, client):
-        """Response time should be under 500ms."""
-        start = time.monotonic()
-        response = client.get("/api/v1/tokenizer")
-        elapsed = time.monotonic() - start
-        assert elapsed < 0.5, f"Took {elapsed:.2f}s, expected <0.5s"
+@app.route("/api/v1/tokenizer", methods=["POST"])
+def create_token():
+    data = request.get_json(silent=True) or {}
+    if not data.get("name") or "value" not in data:
+        return jsonify({"error": "name and value are required"}), 400
+
+    token_id = str(uuid.uuid4())
+    token = {
+        "id": token_id,
+        "name": data["name"],
+        "value": data["value"],
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "revoked_at": None,
+    }
+    _tokens[token_id] = token
+    return jsonify(token), 201
+
+
+@app.route("/api/v1/tokenizer/<token_id>", methods=["GET"])
+def get_token(token_id):
+    token = _tokens.get(token_id)
+    if not token:
+        return jsonify({"error": "token not found"}), 404
+    return jsonify(token)
+
+
+@app.route("/api/v1/tokenizer/<token_id>", methods=["DELETE"])
+def revoke_token(token_id):
+    token = _tokens.get(token_id)
+    if not token:
+        return jsonify({"error": "token not found"}), 404
+
+    if token["status"] == "revoked":
+        return jsonify(token), 200
+
+    token["status"] = "revoked"
+    token["revoked_at"] = datetime.now(timezone.utc).isoformat()
+    return jsonify(token), 200
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
