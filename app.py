@@ -17,6 +17,13 @@ def health():
 def list_tokenizers():
     """List tokenizers with pagination."""
     limit = request.args.get("limit", 20, type=int)
+    
+    # Validate limit parameter
+    if limit < 1:
+        return jsonify({"error": "limit must be positive"}), 400
+    if limit > 100:
+        limit = 100  # Cap at reasonable maximum
+    
     items = list(_tokenizers.values())[:limit]
     return jsonify({"items": items, "total": len(_tokenizers)})
 
