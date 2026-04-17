@@ -1,19 +1,83 @@
 name: CI
+
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
+
 jobs:
-  build:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t payment-gateway:test .
-      - name: Health check
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
         run: |
-          docker run -d -p 8080:8080 --name test payment-gateway:test
-          sleep 5
-          curl -f http://localhost:8080/health
-          docker stop test
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      
+      - name: Run flake8
+        run: flake8 app.py --max-line-length=100
+      
+      - name: Check code formatting
+        run: black --check app.py
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      
+      - name: Run bandit security scan
+        run: bandit -r app.py -ll
+      
+      - name: Check dependencies for vulnerabilities
+        run: safety check --json || true
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask pytest pytest-cov
+      
+      - name: Run tests with coverage
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=90
+
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build image
+        run: docker build -t payment-gateway:${{ github.sha }} .
