@@ -1,10 +1,12 @@
 """Payment gateway tokenizer service."""
+import threading
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
 _tokenizers = {}
 _next_id = 1
+_id_lock = threading.Lock()
 
 
 @app.route("/health")
@@ -39,8 +41,10 @@ def create_tokenizer():
     if not payload.get("name") or payload.get("value") is None:
         return jsonify({"error": "name and value are required"}), 400
 
-    token_id = f"tok_{_next_id}"
-    _next_id += 1
+    with _id_lock:
+        token_id = f"tok_{_next_id}"
+        _next_id += 1
+
     entry = {"id": token_id, "name": payload["name"], "value": payload["value"]}
     _tokenizers[token_id] = entry
     return jsonify(entry), 201
