@@ -14,9 +14,50 @@ app = Flask(__name__)
 # Constants
 DEFAULT_PAGE_LIMIT = 20
 MAX_PAGE_LIMIT = 100
+MIN_NAME_LENGTH = 1
+MAX_NAME_LENGTH = 255
 
 _tokenizers = {}
 _next_id = 1
+
+
+def validate_tokenizer_payload(payload):
+    """Validate tokenizer creation payload.
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not payload:
+        return False, "Request body is required"
+    
+    name = payload.get("name")
+    if not name:
+        return False, "Field 'name' is required"
+    
+    if not isinstance(name, str):
+        return False, "Field 'name' must be a string"
+    
+    if len(name) < MIN_NAME_LENGTH or len(name) > MAX_NAME_LENGTH:
+        return False, f"Field 'name' must be between {MIN_NAME_LENGTH} and {MAX_NAME_LENGTH} characters"
+    
+    if "value" not in payload:
+        return False, "Field 'value' is required"
+    
+    return True, None
+
+
+def error_response(message, status_code=400):
+    """Create standardized error response.
+    
+    Args:
+        message: Error message
+        status_code: HTTP status code
+        
+    Returns:
+        tuple: (json_response, status_code)
+    """
+    logger.warning(f"Error response: {message} (status={status_code})")
+    return jsonify({"error": message, "status": status_code}), status_code
 
 
 @app.route("/health")
@@ -42,8 +83,7 @@ def get_tokenizer(token_id):
     """Get a single tokenizer by ID."""
     entry = _tokenizers.get(token_id)
     if not entry:
-        logger.warning(f"Tokenizer not found: {token_id}")
-        return jsonify({"error": "Tokenizer not found"}), 404
+        return error_response("Tokenizer not found", 404)
     
     logger.info(f"Retrieved tokenizer: {token_id}")
     return jsonify(entry)
@@ -53,12 +93,12 @@ def get_tokenizer(token_id):
 def create_tokenizer():
     """Create a new tokenizer entry."""
     global _next_id
-    payload = request.get_json(silent=True) or {}
-
-    if not payload.get("name") or payload.get("value") is None:
-        logger.warning("Invalid tokenizer creation request: missing name or value")
-        return jsonify({"error": "name and value are required"}), 400
-
+    payload = request.get_json(silent=True)
+    
+    is_valid, error_msg = validate_tokenizer_payload(payload)
+    if not is_valid:
+        return error_response(error_msg)
+    
     token_id = f"tok_{_next_id}"
     _next_id += 1
     entry = {"id": token_id, "name": payload["name"], "value": payload["value"]}
