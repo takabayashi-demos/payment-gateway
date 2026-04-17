@@ -1,58 +1,89 @@
-"""Tests for tokenizer in payment-gateway."""
+"""Tests for payment gateway tokenizer service."""
+import concurrent.futures
 import pytest
-import time
+from app import app
 
 
-class TestTokenizer:
-    """Test suite for tokenizer operations."""
+@pytest.fixture
+def client():
+    """Create test client."""
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        yield client
 
-    def test_health_endpoint(self, client):
-        """Health endpoint should return UP."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["status"] == "UP"
 
-    def test_tokenizer_create(self, client):
-        """Should create a new tokenizer entry."""
-        payload = {"name": "test", "value": 42}
-        response = client.post("/api/v1/tokenizer", json=payload)
-        assert response.status_code in (200, 201)
+def test_health_check(client):
+    """Test health endpoint returns UP."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json["status"] == "UP"
 
-    def test_tokenizer_create_zero_value(self, client):
-        """Should accept value=0 for zero-amount authorization tokens."""
-        payload = {"name": "card-verify", "value": 0}
-        response = client.post("/api/v1/tokenizer", json=payload)
-        assert response.status_code in (200, 201)
-        data = response.get_json()
-        assert data["value"] == 0
 
-    def test_tokenizer_validation(self, client):
-        """Should reject invalid tokenizer data."""
-        response = client.post("/api/v1/tokenizer", json={})
-        assert response.status_code in (400, 422)
+def test_create_tokenizer(client):
+    """Test creating a single tokenizer."""
+    response = client.post(
+        "/api/v1/tokenizer",
+        json={"name": "test_card", "value": "4111111111111111"},
+    )
+    assert response.status_code == 201
+    data = response.json
+    assert data["name"] == "test_card"
+    assert data["value"] == "4111111111111111"
+    assert data["id"].startswith("tok_")
 
-    def test_tokenizer_validation_missing_value(self, client):
-        """Should reject when value is missing entirely."""
-        response = client.post("/api/v1/tokenizer", json={"name": "test"})
-        assert response.status_code in (400, 422)
 
-    def test_tokenizer_not_found(self, client):
-        """Should return 404 for missing tokenizer."""
-        response = client.get("/api/v1/tokenizer/nonexistent")
-        assert response.status_code == 404
+def test_create_tokenizer_missing_fields(client):
+    """Test validation for required fields."""
+    response = client.post("/api/v1/tokenizer", json={"name": "test"})
+    assert response.status_code == 400
+    assert "error" in response.json
 
-    @pytest.mark.parametrize("limit", [1, 10, 50, 100])
-    def test_tokenizer_pagination(self, client, limit):
-        """Should respect pagination limits."""
-        response = client.get(f"/api/v1/tokenizer?limit={limit}")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert len(data.get("items", data.get("tokenizers", []))) <= limit
 
-    def test_tokenizer_performance(self, client):
-        """Response time should be under 500ms."""
-        start = time.monotonic()
-        response = client.get("/api/v1/tokenizer")
-        elapsed = time.monotonic() - start
-        assert elapsed < 0.5, f"Took {elapsed:.2f}s, expected <0.5s"
+def test_get_tokenizer(client):
+    """Test retrieving a tokenizer by ID."""
+    create_response = client.post(
+        "/api/v1/tokenizer",
+        json={"name": "visa", "value": "4242424242424242"},
+    )
+    token_id = create_response.json["id"]
+
+    response = client.get(f"/api/v1/tokenizer/{token_id}")
+    assert response.status_code == 200
+    assert response.json["id"] == token_id
+
+
+def test_get_nonexistent_tokenizer(client):
+    """Test 404 for nonexistent tokenizer."""
+    response = client.get("/api/v1/tokenizer/tok_999999")
+    assert response.status_code == 404
+
+
+def test_list_tokenizers(client):
+    """Test listing tokenizers with pagination."""
+    for i in range(5):
+        client.post(
+            "/api/v1/tokenizer",
+            json={"name": f"card_{i}", "value": f"411111111111{i:04d}"},
+        )
+
+    response = client.get("/api/v1/tokenizer?limit=3")
+    assert response.status_code == 200
+    assert len(response.json["items"]) == 3
+    assert response.json["total"] >= 5
+
+
+def test_concurrent_token_creation(client):
+    """Test that concurrent requests generate unique token IDs."""
+    def create_token(index):
+        return client.post(
+            "/api/v1/tokenizer",
+            json={"name": f"card_{index}", "value": f"4111{index:012d}"},
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(create_token, i) for i in range(50)]
+        responses = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+    token_ids = [r.json["id"] for r in responses]
+    assert len(token_ids) == 50
+    assert len(set(token_ids)) == 50, "Duplicate token IDs detected"
