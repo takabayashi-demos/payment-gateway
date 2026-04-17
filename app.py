@@ -2,8 +2,18 @@
 import re
 import logging
 from flask import Flask, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
+
+# Configure rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["1000 per hour"],
+    storage_uri="memory://"
+)
 
 _tokenizers = {}
 _next_id = 1
@@ -16,6 +26,16 @@ logger = logging.getLogger(__name__)
 MAX_NAME_LENGTH = 255
 MAX_VALUE_LENGTH = 1000
 NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.\s]+$')
+
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Content-Security-Policy'] = "default-src 'self'"
+    return response
 
 
 def validate_tokenizer_input(payload):
@@ -82,6 +102,7 @@ def get_tokenizer(token_id):
 
 
 @app.route("/api/v1/tokenizer", methods=["POST"])
+@limiter.limit("100 per hour")
 def create_tokenizer():
     """Create a new tokenizer entry."""
     global _next_id
